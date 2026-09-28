@@ -217,8 +217,7 @@ def build_keys_t(row):
     return ev
 
 def run_greedy(ev, budget):
-    # ev items are (freq, arr, is-solo-key); admission is budget-governed,
-    # so the solo flag is vestigial here (kept in the ev tuples by build_keys_t)
+    # ev: (freq, arr, is-solo-key)
     c = [(df, arr) for df, arr, _solo in ev]
     c.sort(key=lambda x: x[0])
     u = set()

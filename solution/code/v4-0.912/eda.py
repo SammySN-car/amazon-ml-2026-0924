@@ -10,7 +10,6 @@ Companion doc: eda_walkthrough.md (what each EDA asked and how it was found).
 # --- cell 0 ---
 # [notebook shell] !pip install -q polars numpy pandas huggingface_hub rapidfuzz
 
-# verify (optional)
 import polars, numpy, pandas, rapidfuzz
 print(f"polars {polars.__version__} | numpy {numpy.__version__} | pandas {pandas.__version__} | rapidfuzz {rapidfuzz.__version__}")
 
@@ -64,13 +63,12 @@ print(gt.dtypes)
 import numpy as np, pandas as pd, re, gc
 from rapidfuzz import fuzz
 
-# 0. confirm actual schema first
 print("gt columns:", list(gt.columns), "| gt shape:", gt.shape)
 print("s1 columns:", list(s1.columns))
 print(gt.head(3).to_string())
 
 rng = np.random.default_rng(0)
-N_POS, N_NEG = 25000, 40000          # SAMPLE-BASED results (labeled as such)
+N_POS, N_NEG = 25000, 40000          # SAMPLE-BASED results
 
 def norm(s):  return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", str(s))).upper().strip()
 
@@ -139,7 +137,6 @@ def feats(df, label):
 F = pd.concat([feats(pos, "pos"), feats(neg, "neg")], ignore_index=True)
 del pos, neg; gc.collect()
 
-# 5. the output that matters
 q = [0.05, 0.25, 0.5, 0.75, 0.95]
 print("\n=== NAME signal (pos vs neg) ===")
 for lab in ["pos","neg"]:
@@ -174,7 +171,6 @@ rng = np.random.default_rng(0)
 N_POS, N_NEG = 25000, 40000
 def norm(s): return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", str(s))).upper().strip()
 
-# identical sampling + assembly as EDA-01
 m_full = gt["matched_entity_ids"].fillna("")
 p = ((m_full.str.count(",")+1).where(m_full!="",0)).to_numpy(dtype=float); p /= p.sum()
 samp = gt.iloc[rng.choice(len(gt), N_POS, p=p)]
@@ -216,7 +212,6 @@ def add_feats(df):
     return df
 pos, neg = add_feats(pos), add_feats(neg)
 
-# buckets
 A = pos[(pos.name_ratio<40) & ~pos.addr_miss & (pos.addr_jacc<0.4)]   # hard core
 B = pos[(pos.name_ratio<40) & (pos.addr_jacc>=0.6)]                    # address-driven
 C = neg[neg.name_ratio>=60]                                            # name false-friends
@@ -234,7 +229,6 @@ if len(A):
                            for x,y in zip(A.business_address_1, A.business_address_c)), bool, len(A))
     print(f"A: share ANY number (incl street no): {shared4.mean():.3f}")
 
-# examples
 def show(df, k, title):
     print("\n" + "="*15, title, f"(showing {min(k,len(df))} of {len(df)})", "="*15)
     for _, r in df.sample(min(k,len(df)), random_state=1).iterrows():
@@ -363,7 +357,6 @@ def show(df, k, title):
         print(f"  C : {r.business_name_c} | {r.business_address_c}")
 show(res, 10, "RESIDUAL — positives no simple rule catches")
 
-# where do false positives come from?
 neg_only3 = neg[neg.R3 & ~neg.R1 & ~neg.R2]
 print(f"\nneg caught ONLY by shared-number: {len(neg_only3)/len(neg):.3f}")
 show(neg_only3, 4, "NEG — shared number only (is it coincidence or near-dup?)")
@@ -568,7 +561,7 @@ def toks(s):  return frozenset(t for t in nbase(s).split() if len(t) >= 3)
 def nums(s, ml=1): return frozenset(x for x in re.findall(r"\d+", str(s)) if len(x) >= ml)
 def nonlatin(s): return bool(re.search(r"[\u0900-\u0D7F\u0A00-\u0A7F\u0980-\u09FF]", str(s)))
 
-# rebuild deterministic pairs (same scheme as EDA-01)
+# rebuild deterministic pairs
 m_full = gt["matched_entity_ids"].fillna("")
 p = ((m_full.str.count(",")+1).where(m_full!="",0)).to_numpy(dtype=float); p /= p.sum()
 samp = gt.iloc[rng.choice(len(gt), N_POS, p=p)]
@@ -627,7 +620,6 @@ for k in mp.columns:
           f"{mp[k].to_numpy()[us].mean():7.3f} {mp[k].to_numpy()[ind].mean():7.3f} "
           f"{mp[k].to_numpy()[cross].mean():8.3f} {mp[k].to_numpy()[~cross].mean():8.3f}")
 
-# pairs caught by NEITHER union
 miss = ~(mp.U1_strip_token_num2 | mp.U2_exact_token_num1)
 print(f"\nmissed by both unions: {miss.sum()} ({miss.mean():.4f})")
 mpx = pos[miss.values]
@@ -664,7 +656,7 @@ def bucket_stats(label, fn):
            .with_columns((pl.col("len") + pl.col("len_b").fill_null(0)).alias("size")) \
            .drop("len", "len_b")                 # DataFrame
     s1k = s1p.select([(pl.col("country") + "|" + fn(pl.col("business_name"))).alias("k")])
-    sizes = s1k.join(tot, on="k", how="left")["size"].fill_null(0).to_numpy()   # no .collect() (fixed upstream)
+    sizes = s1k.join(tot, on="k", how="left")["size"].fill_null(0).to_numpy()   # eager frame: no .collect()
     big = tot.filter(pl.col("size") > 50)["size"].sum() / POOL
     top = tot.top_k(5, by="size").rows()
     print(f"[{label}] S1 key present={np.mean(sizes>0):.3f} | bucket: med={np.median(sizes):.0f} "
@@ -738,7 +730,6 @@ import numpy as np
 import polars as pl
 from pathlib import Path
 
-# paths
 TRAIN = Path("/home/ubuntu/dataset/student_resource/dataset/train")
 def find(name):
     p = TRAIN / name
@@ -847,7 +838,6 @@ feat = (pairs.join(s1x, on="s1_id", how="left")
 print("pull nulls (expect 0,0):", feat["s1_name"].null_count(), feat["c_name"].null_count())
 print("countries:", {r[0]: r[1] for r in feat.group_by("s1_country").len().rows()})
 
-# per-pair keys
 DEV = r"[\u0900-\u097F]"
 feat = (feat
     .with_columns([
@@ -993,7 +983,6 @@ import numpy as np
 import polars as pl
 from pathlib import Path
 
-# paths
 TRAIN = Path("/home/ubuntu/dataset/student_resource/dataset/train")
 def find(name):
     p = TRAIN / name
@@ -1102,7 +1091,6 @@ feat = (pairs.join(s1x, on="s1_id", how="left")
 print("pull nulls (expect 0,0):", feat["s1_name"].null_count(), feat["c_name"].null_count())
 print("countries:", {r[0]: r[1] for r in feat.group_by("s1_country").len().rows()})
 
-# per-pair keys
 DEV = r"[\u0900-\u097F]"
 feat = (feat
     .with_columns([
@@ -1163,7 +1151,7 @@ df_addr = corpus_df("addr", r"\w+",    UNI["addr"])
 df_num  = corpus_df("addr", r"\d{2,}", UNI["num"])
 for kk, d in (("name", df_name), ("addr", df_addr), ("num", df_num)):
     print(f"{kk}: universe={UNI[kk].len()} covered={d.height} missing={UNI[kk].len()-d.height} (expect 0)")
-# min-DF + unions (the cells that must re-run against the new DFs):
+# min-DF + unions:
 
 def min_df_join(sh, dff, alias):
     j = sh.join(dff, on="t", how="left")
@@ -1239,7 +1227,6 @@ print("\n=== EDA-10 corrected unions ===")
 print(f"U_strict pos={pos_f['U_strict'].mean():.4f}  neg={neg_f['U_strict'].mean():.4f}")
 print(f"U_loose  pos={pos_f['U_loose'].mean():.4f}  neg={neg_f['U_loose'].mean():.4f}")
 print(f"U_uncapped pos={pos_f['U_uncapped'].mean():.4f}  neg={neg_f['U_uncapped'].mean():.4f}")
-# EDA-11 cap sweep:
 
 # EDA-11: cap sweep — recall / neg / sum-UB candidates-per-S1 across DF caps
 CAPS = [100, 300, 1000, 3000, 10000, 30000, 100000, 10**12]
@@ -1553,7 +1540,7 @@ for row in pos_rows.iter_rows(named=True):
         n_miss_tot += 1
         if m in Uall:
             stat["capacity"] += 1; ct_stat["capacity"] += 1; continue
-        # not in any evaluated key -> why?
+        # not in any evaluated key: reason for the miss
         found = None
         for kind, key, PM in (("N", "n1", P_N), ("A", "a1", P_A), ("M", "m1", P_M)):
             for tok in (row[key] or []):
@@ -1736,7 +1723,6 @@ samp = t1.sort("rand").group_by(cc).head(20000).drop("rand")
 fc = {r[0]: r[1] for r in t1[cc].value_counts().iter_rows()}   # FULL country counts for projection
 print("sample:", samp.height, "| full counts:", fc)
 
-# S1 features
 samp = (samp.with_columns(N(pl.col(nc)).alias("sn1"))
         .with_columns([pl.col("sn1").str.extract_all(r"\w+").list.unique().alias("n1"),
                        N(pl.col(ac)).alias("na"),
