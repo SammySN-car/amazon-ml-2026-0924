@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 *.npz
 *.zip
+# large regenerable model artifacts (distributed via GitHub Release, not git)
+xgb_b100.json

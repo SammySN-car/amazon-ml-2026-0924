@@ -1,0 +1,16 @@
+{
+  "budget": 100,
+  "device": "cpu",
+  "threshold": 0.97,
+  "prod_weighted_f05": 0.9181915100758351,
+  "cond_f05_matched": 0.9247123606251656,
+  "empty_emit_rate": 0.1921487603305785,
+  "val_plain_macro_f05": 0.9203021631559586,
+  "micro_p": 0.9512200768625272,
+  "micro_r": 0.8807125096458887,
+  "micro_f05": 0.9362296516397176,
+  "val_groups_matched": 12341,
+  "val_groups_empty": 484,
+  "best_iteration": 2998,
+  "threshold_prev": 0.9699999999999999
+}

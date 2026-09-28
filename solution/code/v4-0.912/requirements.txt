@@ -1,0 +1,11 @@
+# Business Entity Resolution - Amazon ML Challenge 2026 - pinned environment
+# Tested: Linux x86_64, 8 vCPU, 63 GB RAM, CPython 3.14 (venv)
+# CPU-only pipeline; no GPU required or used.
+numpy==2.5.3
+polars==1.41.2
+RapidFuzz==3.14.6
+xgboost==3.4.1
+lightgbm==4.7.0
+catboost==1.2.10
+pandas==3.0.6        # only for eda.py (analysis); pipeline itself is polars/numpy
+huggingface_hub           # only for eda.py (dataset download); needs HF_TOKEN env var
