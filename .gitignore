@@ -1,0 +1,9 @@
+*.tsv
+*.tsv.gz
+*.parquet
+output/
+output_v4/
+__pycache__/
+*.pyc
+*.npz
+*.zip
