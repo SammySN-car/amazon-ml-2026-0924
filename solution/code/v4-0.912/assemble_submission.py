@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# assemble_submission.py - convert test_out npz checkpoints into the two submission TSVs.
-# env OUTD   = dir with c*.npz (default /home/ubuntu/test_out; v4 uses test_out_v4)
-# env OUTDIR = output dir     (default /home/ubuntu/output)
-# env POSTPROC = none | country | country+1to1   (matching_results only; candidates
-#   stay raw blocking output; matched stays a subset of candidates either way).
-# Run AFTER inference.py prints "inference done".
+"""assemble_submission.py - convert test_out npz checkpoints into the two submission TSVs.
+env OUTD   = dir with c*.npz (default /home/ubuntu/test_out; v4 uses test_out_v4)
+env OUTDIR = output dir     (default /home/ubuntu/output)
+env POSTPROC = none | country | country+1to1   (matching_results only; candidates
+stay raw blocking output; matched stays a subset of candidates either way).
+Run AFTER inference.py prints "inference done".
+"""
 import os, re, gc, glob, time
 import numpy as np
 import polars as pl

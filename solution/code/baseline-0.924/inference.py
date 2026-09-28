@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-# inference.py - FULL test pipeline: state build -> blocking -> features -> score
-# resumable (chunk checkpoints), per-chunk logging, safe to re-run any time.
+"""inference.py - FULL test pipeline: state build -> blocking -> features -> score
+resumable (chunk checkpoints), per-chunk logging, safe to re-run any time.
+env OUTD = checkpoint dir (default /home/ubuntu/test_out).
+"""
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -13,7 +15,7 @@ from rapidfuzz import fuzz
 from multiprocessing import get_context
 
 BASE = "/home/ubuntu/dataset/student_resource/dataset"
-OUTD = "/home/ubuntu/test_out"
+OUTD = os.environ.get("OUTD", "/home/ubuntu/test_out")
 NW, BUDGET, CHUNK = 8, 100, 4000
 os.makedirs(OUTD, exist_ok=True)
 for f in glob.glob(OUTD + "/*.tmp"):
@@ -174,8 +176,10 @@ def build_keys_t(row):
                     if r: ev.append((r[0], r[1], False))
     return ev
 
-def run_greedy(ev, budget, solo_only=False):
-    c = [(df, arr) for df, arr, solo in ev if (solo or not solo_only)]
+def run_greedy(ev, budget):
+    # ev items are (freq, arr, is-solo-key); admission is budget-governed,
+    # so the solo flag is vestigial here (kept in the ev tuples by build_keys_t)
+    c = [(df, arr) for df, arr, _solo in ev]
     c.sort(key=lambda x: x[0])
     u = set()
     for df, arr in c:
@@ -291,3 +295,4 @@ with get_context("fork").Pool(NW) as pool:
 print(f"\ninference done: ok={ok} err={errs} | cands {cand_tot:,} pass {pass_tot:,} | {(time.time()-t1e)/3600:.1f} h", flush=True)
 if errs:
     print("failed chunks (re-run to retry):", err_starts, flush=True)
+    raise SystemExit(1)

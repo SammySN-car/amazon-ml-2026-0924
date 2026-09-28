@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-# prepare_data.py - builds TRAIN blocking candidates from raw train data (no FE, no model).
-# Chain: features.py (lib) -> prepare_data.py (this) -> train.py -> inference.py -> assemble_submission.py
-# Sample : seed-0 random 64,125 S1 rows (same size as the original training sample;
-#          the original sample was EDA-derived - see README, exact replication not required).
-# Blocking: same key family as inference.py (N-norm tokens, NFD accent-fold exact key,
-#          postings restricted to sample token universe, MAXB=200, greedy budget=100).
-#          One deliberate difference: inference.py additionally partitions candidates
-#          by country at test time; the train pool does not (the shipped model was
-#          trained on this asymmetry - see README "Blocking").
-# Output : train_cands.parquet (s1_id, cand_id) - consumed by train.py.
+"""prepare_data.py - builds TRAIN blocking candidates from raw train data (no FE, no model).
+Chain: features.py (lib) -> prepare_data.py (this) -> train.py -> inference.py -> assemble_submission.py
+Sample : seed-0 random 64,125 S1 rows (same size as the original training sample;
+the original sample was EDA-derived - see README, exact replication not required).
+Blocking: same key family as inference.py (N-norm tokens, NFD accent-fold exact key,
+postings restricted to sample token universe, MAXB=200, greedy budget=100).
+One deliberate difference: inference.py additionally partitions candidates
+by country at test time; the train pool does not (the shipped model was
+trained on this asymmetry - see README "Blocking").
+Output : train_cands.parquet (s1_id, cand_id) - consumed by train.py.
+"""
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("RAYON_NUM_THREADS", "1")   # must be set BEFORE polars import
-import re, gc, time, unicodedata
+import gc, time, unicodedata
 import numpy as np, polars as pl
 from multiprocessing import get_context
 
@@ -64,7 +65,7 @@ s1f = (samp.select([pl.col(idc).alias("s1_id"), pl.col(cc).alias("ct"), pl.col(n
 del samp; gc.collect()
 print(f"[{((time.time()-t0)/60):.1f} min] s1f {s1f.height:,}", flush=True)
 
-# ---------- token universe = SAMPLED s1s (EDA pattern: s1tok scope) ----------
+# ---------- token universe = sampled S1 rows (mirrors eda.py) ----------
 tokN_l = s1f.select(pl.col("n1").explode().alias("t")).drop_nulls().unique()["t"].to_list()
 tokA_l = s1f.select(pl.col("a1").explode().alias("t")).drop_nulls().unique()["t"].to_list()
 tokM_l = s1f.select(pl.col("m1").explode().alias("t")).drop_nulls().unique()["t"].to_list()
@@ -165,8 +166,10 @@ def build_keys_t(row):
                     if r: ev.append((r[0], r[1], False))
     return ev
 
-def run_greedy(ev, budget, solo_only=False):
-    c = [(df, arr) for df, arr, solo in ev if (solo or not solo_only)]
+def run_greedy(ev, budget):
+    # ev items are (freq, arr, is-solo-key); admission is budget-governed,
+    # so the solo flag is vestigial here (kept in the ev tuples by build_keys_t)
+    c = [(df, arr) for df, arr, _solo in ev]
     c.sort(key=lambda x: x[0])
     u = set()
     for df, arr in c:

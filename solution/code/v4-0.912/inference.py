@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-# inference.py - test pipeline v4: country-partitioned greedy, 36 features (features),
-# ensemble scoring from v4_model.json, per-chunk X.npy save (future rescoring = predict-only).
-# env BASE = dataset root (contains train/ and test/); env OUTD = checkpoint dir
-# (default /home/ubuntu/test_out_v4); env MODEL = model spec path. The baseline
-# pipeline keeps its own OUTD dir. Resumable per chunk.
+"""inference.py - test pipeline v4: country-partitioned greedy, 36 features (features.py),
+ensemble scoring from v4_model.json, per-chunk X.npy save (future rescoring = predict-only).
+env BASE = dataset root (contains train/ and test/); env OUTD = checkpoint dir
+(default /home/ubuntu/test_out_v4); env MODEL = model spec path. The baseline
+pipeline keeps its own OUTD dir. Resumable per chunk.
+"""
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("RAYON_NUM_THREADS", "1")
-import re, gc, json, time, glob, sys
+import gc, json, time, glob
 import numpy as np, polars as pl
 import xgboost as xgb
 from multiprocessing import get_context
@@ -183,6 +184,7 @@ def build_keys_t(row):
     ct = row["ct"]
     ctc = CT_CODE.get(ct, -1)
     def cf(arr):
+        # unknown/null country (ctc == -1) -> no candidates match by design
         return arr[CTI[arr] == ctc] if ctc >= 0 else arr[:0]
     n_t = [t for t in (row["n1"] or []) if t in PT_N]
     a_t = [t for t in (row["a1"] or []) if t in PT_A]
@@ -214,8 +216,10 @@ def build_keys_t(row):
                         if h.size: ev.append((r[0], h, False))
     return ev
 
-def run_greedy(ev, budget, solo_only=False):
-    c = [(df, arr) for df, arr, solo in ev if (solo or not solo_only)]
+def run_greedy(ev, budget):
+    # ev items are (freq, arr, is-solo-key); admission is budget-governed,
+    # so the solo flag is vestigial here (kept in the ev tuples by build_keys_t)
+    c = [(df, arr) for df, arr, _solo in ev]
     c.sort(key=lambda x: x[0])
     u = set()
     for df, arr in c:
@@ -306,3 +310,4 @@ with get_context("fork").Pool(NW) as pool:
 print(f"\ninference done: ok={ok} err={errs} | cands {cand_tot:,} pass {pass_tot:,} | {(time.time()-t1e)/3600:.1f} h", flush=True)
 if errs:
     print("failed chunks (re-run to retry):", err_starts, flush=True)
+    raise SystemExit(1)

@@ -1,6 +1,8 @@
-# features.py - shared feature core for inference.py AND train.py.
-# Features 0..19 are copied VERBATIM from baseline-0.924/inference.py (see docs/methodology.md).
-# Features 20..35 are new in v4. FEATS order is the train/test contract.
+"""features.py - shared feature core for inference.py AND train.py; FEATS order is also
+the X.npy column contract that rescore.py consumes.
+Features 0..19 are copied VERBATIM from baseline-0.924/inference.py (see ../../docs/methodology.md).
+Features 20..35 are new in v4. FEATS order is the train/test contract.
+"""
 import re
 import unicodedata
 import numpy as np

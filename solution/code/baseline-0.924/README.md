@@ -16,11 +16,11 @@ WHAT YOU NEED (nothing else - no external state, no pickles, no caches)
 
 PATHS TO EDIT (all hardcoded to /home/ubuntu/... - 5 edit sites)
 ---------------------------------------------------------------------
-inference.py    line ~15:  BASE  = ".../dataset"        -> your dataset folder
-           line ~16:  OUTD  = "/home/ubuntu/test_out" -> scratch dir for npz
-           line ~189: model  = "/home/ubuntu/xgb_b100.json"   -> where you put the model (not in git)
-           line ~190: "/home/ubuntu/threshold_b100.json"      -> ships in this folder; edit the path only
-assemble_submission.py line ~12: BASE  = ".../dataset"          -> same dataset folder
+inference.py    line ~17:  BASE  = ".../dataset"        -> your dataset folder
+           line ~18:  OUTD  (env OUTD, default /home/ubuntu/test_out) -> scratch dir for npz
+           line ~193: model  = "/home/ubuntu/xgb_b100.json"   -> where you put the model (not in git)
+           line ~194: "/home/ubuntu/threshold_b100.json"      -> ships in this folder; edit the path only
+assemble_submission.py line ~13: BASE  = ".../dataset"          -> same dataset folder
            (OUTD/OUTDIR are env vars: OUTD=<npz dir> OUTDIR=output python assemble_submission.py)
 
 FILES

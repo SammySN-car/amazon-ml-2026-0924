@@ -7,18 +7,14 @@ Edit the data paths at the top for your machine.
 Companion doc: eda_walkthrough.md (what each EDA asked and how it was found).
 """
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 0
-# ==========================================================================
+# --- cell 0 ---
 # [notebook shell] !pip install -q polars numpy pandas huggingface_hub rapidfuzz
 
 # verify (optional)
-import polars, numpy, pandas, huggingface_hub, rapidfuzz
+import polars, numpy, pandas, rapidfuzz
 print(f"polars {polars.__version__} | numpy {numpy.__version__} | pandas {pandas.__version__} | rapidfuzz {rapidfuzz.__version__}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 1
-# ==========================================================================
+# --- cell 1 ---
 import os
 from huggingface_hub import snapshot_download
 
@@ -29,9 +25,7 @@ snapshot_download(
     token=os.environ["HF_TOKEN"]  # export HF_TOKEN before running; never hardcode tokens
 )
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 2
-# ==========================================================================
+# --- cell 2 ---
 import pandas as pd
 
 s1 = pd.read_csv("/home/ubuntu/dataset/student_resource/dataset/train/train_source1.tsv", sep="\t")
@@ -44,9 +38,7 @@ print(s2.shape)
 print(s3.shape)
 print(gt.shape)
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 3
-# ==========================================================================
+# --- cell 3 ---
 print(s1.shape)
 print(s2.shape)
 print(s3.shape)
@@ -67,14 +59,12 @@ print(gt.head())
 print(s1.dtypes)
 print(gt.dtypes)
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 4
-# ==========================================================================
+# --- cell 4 ---
 # [notebook shell] !pip install -q rapidfuzz
 import numpy as np, pandas as pd, re, gc
 from rapidfuzz import fuzz
 
-# ---- 0. confirm actual schema first ----
+# 0. confirm actual schema first
 print("gt columns:", list(gt.columns), "| gt shape:", gt.shape)
 print("s1 columns:", list(s1.columns))
 print(gt.head(3).to_string())
@@ -84,7 +74,7 @@ N_POS, N_NEG = 25000, 40000          # SAMPLE-BASED results (labeled as such)
 
 def norm(s):  return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", str(s))).upper().strip()
 
-# ---- 1. derive n_matches LOCALLY (gt untouched), sample rows, explode ONLY the sample ----
+# 1. derive n_matches LOCALLY (gt untouched), sample rows, explode ONLY the sample
 m_full = gt["matched_entity_ids"].fillna("")
 n_matches = (m_full.str.count(",") + 1).where(m_full != "", 0)   # local Series
 print("sanity: zero-match =", int((n_matches==0).sum()),
@@ -97,7 +87,7 @@ ex = ex[ex["m"].notna() & (ex["m"] != "")]
 pairs_pos = ex[["source1_entity_id", "m"]].rename(columns={"source1_entity_id": "s1", "m": "cand"})
 print(f"sampled {N_POS} GT rows -> {len(pairs_pos)} positive pairs")
 
-# ---- 2. random same-country negatives (by construction) ----
+# 2. random same-country negatives (by construction)
 pools = {}
 for nm, df in [("S2", s2), ("S3", s3)]:
     for c in df["country"].unique():
@@ -112,7 +102,7 @@ for eid, c in zip(s1samp["entity_id"], s1samp["country"]):
 pairs_neg = pd.DataFrame(neg_rows, columns=["s1", "cand"])
 del samp, ex, s1samp, neg_rows, p, m_full; gc.collect()
 
-# ---- 3. pull text ONLY for sampled ids ----
+# 3. pull text ONLY for sampled ids
 def assemble(prs):
     def pull(ids, df):
         return df[df["entity_id"].isin(ids)][["entity_id","business_name","business_address","country"]]
@@ -127,7 +117,7 @@ pos = assemble(pairs_pos); neg = assemble(pairs_neg)
 del pairs_pos, pairs_neg, pools; gc.collect()
 print(f"pos text rows: {len(pos)} | neg text rows: {len(neg)} | country mismatch in pos: {(pos['country_1']!=pos['country_c']).mean():.6f}")
 
-# ---- 4. similarity features ----
+# 4. similarity features
 def feats(df, label):
     n1 = [norm(x) for x in df["business_name_1"]]; n2 = [norm(x) for x in df["business_name_c"]]
     t1 = [frozenset(x.split()) for x in n1];        t2 = [frozenset(x.split()) for x in n2]
@@ -149,7 +139,7 @@ def feats(df, label):
 F = pd.concat([feats(pos, "pos"), feats(neg, "neg")], ignore_index=True)
 del pos, neg; gc.collect()
 
-# ---- 5. the output that matters ----
+# 5. the output that matters
 q = [0.05, 0.25, 0.5, 0.75, 0.95]
 print("\n=== NAME signal (pos vs neg) ===")
 for lab in ["pos","neg"]:
@@ -176,9 +166,7 @@ def quad(s):
     })
 print(pd.DataFrame({"pos": quad(F[F.label=="pos"]), "neg": quad(F[F.label=="neg"])}).round(3))
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 5
-# ==========================================================================
+# --- cell 5 ---
 import numpy as np, pandas as pd, re, gc
 from rapidfuzz import fuzz
 
@@ -186,7 +174,7 @@ rng = np.random.default_rng(0)
 N_POS, N_NEG = 25000, 40000
 def norm(s): return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9 ]", " ", str(s))).upper().strip()
 
-# ---- identical sampling + assembly as EDA-01 ----
+# identical sampling + assembly as EDA-01
 m_full = gt["matched_entity_ids"].fillna("")
 p = ((m_full.str.count(",")+1).where(m_full!="",0)).to_numpy(dtype=float); p /= p.sum()
 samp = gt.iloc[rng.choice(len(gt), N_POS, p=p)]
@@ -228,7 +216,7 @@ def add_feats(df):
     return df
 pos, neg = add_feats(pos), add_feats(neg)
 
-# ---- buckets ----
+# buckets
 A = pos[(pos.name_ratio<40) & ~pos.addr_miss & (pos.addr_jacc<0.4)]   # hard core
 B = pos[(pos.name_ratio<40) & (pos.addr_jacc>=0.6)]                    # address-driven
 C = neg[neg.name_ratio>=60]                                            # name false-friends
@@ -237,7 +225,7 @@ print(f"% of positives : A(hard core)={len(A)/len(pos):.3f}  B(addr-driven)={len
 print(f"% of negatives : C(false friends)={len(C)/len(neg):.3f}")
 print(f"A addr_jacc quantiles: {A.addr_jacc.quantile([.05,.25,.5,.75]).round(2).to_dict()}")
 
-# ---- digit/ZIP rescue test on bucket A ----
+# digit/ZIP rescue test on bucket A
 def runs(s): return set(re.findall(r"\d{4,}", str(s))) if isinstance(s, str) else set()
 if len(A):
     shared = np.fromiter((bool(runs(x) & runs(y)) for x,y in zip(A.business_address_1, A.business_address_c)), bool, len(A))
@@ -246,7 +234,7 @@ if len(A):
                            for x,y in zip(A.business_address_1, A.business_address_c)), bool, len(A))
     print(f"A: share ANY number (incl street no): {shared4.mean():.3f}")
 
-# ---- examples ----
+# examples
 def show(df, k, title):
     print("\n" + "="*15, title, f"(showing {min(k,len(df))} of {len(df)})", "="*15)
     for _, r in df.sample(min(k,len(df)), random_state=1).iterrows():
@@ -258,16 +246,14 @@ show(B, 4, "B — POSITIVE, address-driven (low name, high addr)")
 show(C, 6, "C — NEGATIVE with name >= 60 (the precision trap)")
 show(D, 6, "D — POSITIVE with essentially no name signal AND missing address")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 6
-# ==========================================================================
-# ============ EDA-03: script, containment, suffix stripping ============
+# --- cell 6 ---
+# EDA-03: script, containment, suffix stripping
 import re, numpy as np, pandas as pd
 from rapidfuzz import fuzz
 norm = lambda s: re.sub(r"\s+"," ",re.sub(r"[^A-Za-z0-9 ]"," ",str(s))).upper().strip()
 q = [.05,.25,.5,.75,.95]
 
-# ---- S1. script of each name ----
+# S1. script of each name
 SCRIPTS = [("Deva",r"[\u0900-\u097F]"),("Beng",r"[\u0980-\u09FF]"),("Guru",r"[\u0A00-\u0A7F]"),
            ("Gujr",r"[\u0A80-\u0AFF]"),("Taml",r"[\u0B80-\u0BFF]"),("Knda",r"[\u0C80-\u0CFF]"),
            ("Mlym",r"[\u0D00-\u0D7F]"),("Thai",r"[\u0E00-\u0E7F]"),("Cyrl",r"[\u0400-\u04FF]"),
@@ -291,13 +277,13 @@ print("pos cross-script by country:", pos.assign(x=pos.sc1!=pos.sc2).groupby("co
 print("pos cross-script pairs: addr_jacc q:", pc.addr_jacc.quantile([.25,.5,.75]).round(2).to_dict(),
       "| addr_miss:", round(pc.addr_miss.mean(),3))
 
-# ---- S2. name separation WITHIN same script ----
+# S2. name separation WITHIN same script
 print("\n=== S2: name_ratio on SAME-script pairs only ===")
 for lab, df in [("pos",pos),("neg",neg)]:
     s = df[df.sc1==df.sc2]
     print(f"{lab}: n={len(s)} | ratio q:", s.name_ratio.quantile(q).round(1).to_dict())
 
-# ---- S3. address containment (fragment-friendly) vs jaccard ----
+# S3. address containment (fragment-friendly) vs jaccard
 print("\n=== S3: address containment |a∩b|/min(|a|,|b|) vs jaccard ===")
 def toks(x): return frozenset(norm(x).split()) if isinstance(x, str) else frozenset()
 def cont(x, y):
@@ -314,7 +300,7 @@ for lab, df in [("pos",pos),("neg",neg)]:
     sh = np.fromiter((bool(nums(x)&nums(y)) for x,y in zip(df.business_address_1, df.business_address_c)), bool, len(df))
     print(f"{lab}: share ANY number = {sh.mean():.3f}")
 
-# ---- S4. suffix-stripped name similarity ----
+# S4. suffix-stripped name similarity
 print("\n=== S4: strip legal suffixes, recompute ratio ===")
 SUF = r"\b(LLC|INC|CORP(?:ORATION)?|LTD|LIMITED|PVT|PRIVATE|LLP|PLC|LP|CO|COMPANY)\b"
 def strip_suf(s): return re.sub(r"\s+"," ", re.sub(SUF," ", norm(s))).strip()
@@ -332,10 +318,8 @@ neg["raw"], neg["stripped"] = r0, r1   # keep for last line
 print("neg false-friend rate: raw>=60:", round((neg.raw>=60).mean(),3),
       "| stripped>=60:", round((neg.stripped>=60).mean(),3))
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 7
-# ==========================================================================
-# ============ EDA-04: rule coverage + residual anatomy ============
+# --- cell 7 ---
+# EDA-04: rule coverage + residual anatomy
 import re, numpy as np, pandas as pd
 from rapidfuzz import fuzz
 norm = lambda s: re.sub(r"\s+"," ",re.sub(r"[^A-Za-z0-9 ]"," ",str(s))).upper().strip()
@@ -366,7 +350,7 @@ print("\npos U123 by country:", pos.groupby("country_1")["U123"].mean().round(3)
 print("pos U123: cross-script:", round(pos[pos.sc1!=pos.sc2]["U123"].mean(),3),
       "| same-script:", round(pos[pos.sc1==pos.sc2]["U123"].mean(),3))
 
-# ---- the residual: positives NO rule catches ----
+# the residual: positives NO rule catches
 res = pos[~pos.U123]
 print(f"\nRESIDUAL positives: {len(res)} ({len(res)/len(pos):.3f}) | cross-script share: {(res.sc1!=res.sc2).mean():.3f}")
 def show(df, k, title):
@@ -379,15 +363,13 @@ def show(df, k, title):
         print(f"  C : {r.business_name_c} | {r.business_address_c}")
 show(res, 10, "RESIDUAL — positives no simple rule catches")
 
-# ---- where do false positives come from? ----
+# where do false positives come from?
 neg_only3 = neg[neg.R3 & ~neg.R1 & ~neg.R2]
 print(f"\nneg caught ONLY by shared-number: {len(neg_only3)/len(neg):.3f}")
 show(neg_only3, 4, "NEG — shared number only (is it coincidence or near-dup?)")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 8
-# ==========================================================================
-# ============ EDA-05: structure, overlap, key selectivity ============
+# --- cell 8 ---
+# EDA-05: structure, overlap, key selectivity
 import pandas as pd, numpy as np, gc
 SUF = r"\b(LLC|INC|CORP(?:ORATION)?|LTD|LIMITED|PVT|PRIVATE|LLP|PLC|LP|CO|COMPANY)\b"
 def vnorm(col):   # vectorized: uppercase, alnum-only, collapse space, strip legal suffix
@@ -395,13 +377,13 @@ def vnorm(col):   # vectorized: uppercase, alnum-only, collapse space, strip leg
                .str.replace(SUF, " ", regex=True)
                .str.replace(r"\s+", " ", regex=True).str.strip())
 
-# ---- S1. uniqueness & exact duplicates ----
+# S1. uniqueness & exact duplicates
 print("=== S1: uniqueness & exact duplicates ===")
 for n, d in [("s1", s1), ("s2", s2), ("s3", s3)]:
     dup = d.duplicated(subset=["business_name","business_address","country"], keep=False).sum()
     print(f"{n}: id_unique={d.entity_id.is_unique} | rows in exact-dup groups: {dup:,} ({dup/len(d):.3%})")
 
-# ---- S2. exact-name key selectivity on the pool ----
+# S2. exact-name key selectivity on the pool
 print("\n=== S2: (country, exact-stripped-name) key selectivity ===")
 pk = pd.concat([s2[["country","business_name"]], s3[["country","business_name"]]], ignore_index=True)
 key = pk["country"] + "|" + vnorm(pk["business_name"])
@@ -419,7 +401,7 @@ print(f"S1 having this key in pool: {bs.notna().mean():.3f} | bucket size for th
       bs.dropna().quantile([.5,.9,.99]).round(0).to_dict(), "| max:", bs.max())
 del key, vc, s1key, bs; gc.collect()
 
-# ---- S3. S2 vs S3 overlap (hash-based, memory-cheap) ----
+# S3. S2 vs S3 overlap (hash-based, memory-cheap)
 print("\n=== S3: cross-source overlap ===")
 hh = lambda c1, c2: pd.util.hash_pandas_object(c1 + "|" + c2, index=False).to_numpy(np.uint64)
 k2 = hh(s2["country"], vnorm(s2["business_name"])); k3 = hh(s3["country"], vnorm(s3["business_name"]))
@@ -431,7 +413,7 @@ k1 = hh(s1["country"], vnorm(s1["business_name"]))
 print(f"S1 exact keys present in S2∪S3: {np.isin(k1, np.concatenate([k2, k3])).mean():.3f}")
 del k1, k2, k3, r2, r3; gc.collect()
 
-# ---- S4. within-S1 match diversity (3000-row sample) — FIXED ----
+# S4. within-S1 match diversity (3000-row sample)
 m = gt["matched_entity_ids"].fillna("")
 n = (m.str.count(",") + 1).where(m != "", 0)
 samp = gt[n >= 2].sample(3000, random_state=0)
@@ -468,22 +450,20 @@ for sid in big:
     for _, r in merged[merged["source1_entity_id"] == sid].iterrows():
         print(f"   {r.entity_id[:2]}: {r.business_name} | {r.business_address}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 9
-# ==========================================================================
+# --- cell 9 ---
 import pandas as pd
 BASE = "/home/ubuntu/dataset/student_resource/dataset"
 t1 = pd.read_csv(f"{BASE}/test/test_source1.tsv", sep="\t")
 t2 = pd.read_csv(f"{BASE}/test/test_source2.tsv", sep="\t")
 t3 = pd.read_csv(f"{BASE}/test/test_source3.tsv", sep="\t")
 
-# ---- A. shapes, countries, nulls ----
+# A. shapes, countries, nulls
 print("=== A. test structure ===")
 for n, d in [("t1", t1), ("t2", t2), ("t3", t3)]:
     print(n, d.shape, list(d.columns), "| countries:", d["country"].value_counts(dropna=False).to_dict())
 print("nulls:", {n: d.isna().mean().round(3).to_dict() for n, d in [("t1",t1),("t2",t2),("t3",t3)]})
 
-# ---- B. normalization sanity: OLD (script-erasing) vs NEW (ASCII-punct-only) ----
+# B. normalization sanity: OLD (script-erasing) vs NEW (ASCII-punct-only)
 PUNCT = r"[!-/:-@\[-`{-~]"          # all ASCII punctuation ranges
 def n_old(c): return (c.fillna("").str.upper().str.replace(r"[^A-Z0-9 ]", " ", regex=True)
                            .str.replace(r"\s+", " ", regex=True).str.strip())
@@ -498,13 +478,13 @@ for n, d in [("s2",s2), ("s3",s3), ("t2",t2), ("t3",t3)]:
     e = n_old(d["business_name"]) == ""
     print(f"{n} OLD-empty by country:", d.assign(e=e).groupby("country")["e"].mean().round(4).to_dict())
 
-# ---- C. non-ASCII names (accents / scripts) by country ----
+# C. non-ASCII names (accents / scripts) by country
 print("\n=== C. names containing non-ASCII chars ===")
 for n, d in [("s1",s1), ("s2",s2), ("t1",t1), ("t2",t2), ("t3",t3)]:
     na = d["business_name"].fillna("").str.contains(r"[^\x00-\x7F]", regex=True)
     print(n, d.assign(na=na).groupby("country")["na"].mean().round(4).to_dict())
 
-# ---- D. France address & suffix structure ----
+# D. France address & suffix structure
 print("\n=== D. France structure ===")
 fr_name = [c for c in t2["country"].unique() if str(c).strip().lower().startswith("fr")]
 print("France country value(s) in test:", fr_name)
@@ -525,10 +505,8 @@ for suf in ["LLC","INC","PVT","PRIVATE"]:
     print(f"t1 US suffix {suf}: {r1:.4f}")
 del t1, t2, t3, fr, addr; gc.collect()
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 10
-# ==========================================================================
-# ============ EDA-07: field internals — numbers, postal keys, char inventory ============
+# --- cell 10 ---
+# EDA-07: field internals — numbers, postal keys, char inventory
 import pandas as pd, numpy as np, re, gc, unicodedata
 from collections import Counter
 
@@ -555,7 +533,7 @@ t1 = pd.read_csv(f"{BASE}/test/test_source1.tsv", sep="\t")
 profile(t1, "t1 (test S1)")
 del t1; gc.collect()
 
-# ---- char inventory: WHICH non-ASCII chars, and what categories ----
+# char inventory: WHICH non-ASCII chars, and what categories
 def char_inventory(d, label):
     print(f"=== char inventory: {label} ===")
     for c in d["country"].unique():
@@ -574,9 +552,7 @@ t1 = pd.read_csv(f"{BASE}/test/test_source1.tsv", sep="\t")
 char_inventory(t1, "test t1")
 del t1; gc.collect()
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 11
-# ==========================================================================
+# --- cell 11 ---
 import numpy as np, pandas as pd, re, gc
 
 rng = np.random.default_rng(0)
@@ -592,7 +568,7 @@ def toks(s):  return frozenset(t for t in nbase(s).split() if len(t) >= 3)
 def nums(s, ml=1): return frozenset(x for x in re.findall(r"\d+", str(s)) if len(x) >= ml)
 def nonlatin(s): return bool(re.search(r"[\u0900-\u0D7F\u0A00-\u0A7F\u0980-\u09FF]", str(s)))
 
-# ---- rebuild deterministic pairs (same scheme as EDA-01) ----
+# rebuild deterministic pairs (same scheme as EDA-01)
 m_full = gt["matched_entity_ids"].fillna("")
 p = ((m_full.str.count(",")+1).where(m_full!="",0)).to_numpy(dtype=float); p /= p.sum()
 samp = gt.iloc[rng.choice(len(gt), N_POS, p=p)]
@@ -659,10 +635,8 @@ for _, r in mpx.sample(min(5, len(mpx)), random_state=1).iterrows():
     print(f"  S1: {r.business_name_1} | {r.business_address_1}")
     print(f"  C : {r.business_name_c} | {r.business_address_c}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 12
-# ==========================================================================
-# ============ EDA-09: blocking-key SELECTIVITY (full pool, polars streaming) v2 ============
+# --- cell 12 ---
+# EDA-09: blocking-key SELECTIVITY (full pool, polars streaming)
 # [notebook shell] !pip install -q polars==1.41.2
 import polars as pl, numpy as np, gc
 BASE = "/home/ubuntu/dataset/student_resource/dataset"
@@ -680,7 +654,7 @@ lf2 = pl.scan_csv(f"{BASE}/train/train_source2.tsv", separator="\t")   # LazyFra
 lf3 = pl.scan_csv(f"{BASE}/train/train_source3.tsv", separator="\t")
 POOL = 10_320_219
 
-# ---- A. exact / strip / prefix4 bucket sizes (norm2 - bug fixed) ----
+# A. exact / strip / prefix4 bucket sizes (norm2)
 def bucket_stats(label, fn):
     def kc(lf):
         return lf.select([(pl.col("country") + "|" + fn(pl.col("business_name"))).alias("k")]) \
@@ -690,7 +664,7 @@ def bucket_stats(label, fn):
            .with_columns((pl.col("len") + pl.col("len_b").fill_null(0)).alias("size")) \
            .drop("len", "len_b")                 # DataFrame
     s1k = s1p.select([(pl.col("country") + "|" + fn(pl.col("business_name"))).alias("k")])
-    sizes = s1k.join(tot, on="k", how="left")["size"].fill_null(0).to_numpy()   # FIXED: no .collect()
+    sizes = s1k.join(tot, on="k", how="left")["size"].fill_null(0).to_numpy()   # no .collect() (fixed upstream)
     big = tot.filter(pl.col("size") > 50)["size"].sum() / POOL
     top = tot.top_k(5, by="size").rows()
     print(f"[{label}] S1 key present={np.mean(sizes>0):.3f} | bucket: med={np.median(sizes):.0f} "
@@ -704,7 +678,7 @@ bucket_stats("exact",  nn)
 bucket_stats("strip",  nns)
 bucket_stats("pref4",  lambda c: nn(c).str.slice(0, 4))
 
-# ---- B. token / number document frequencies (streaming) ----
+# B. token / number document frequencies (streaming)
 def tok_df(lf, col):
     return (lf.select(nn(pl.col(col)).str.split(" ").explode().alias("t"))
                .filter(pl.col("t").str.len_chars() >= 3)
@@ -757,16 +731,14 @@ tot_ub = e1 + e2 + e3
 print(f"SUM of all three (union upper bound): mean={tot_ub.mean():.1f} p99={np.percentile(tot_ub,99):.0f}")
 print("NOTE: union <= sum (overlap not removed). Exact union measured on sample next.")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 13
-# ==========================================================================
+# --- cell 13 ---
 # [notebook magic] %%time
 import gc, unicodedata
 import numpy as np
 import polars as pl
 from pathlib import Path
 
-# ---- paths ----
+# paths
 TRAIN = Path("/home/ubuntu/dataset/student_resource/dataset/train")
 def find(name):
     p = TRAIN / name
@@ -785,7 +757,7 @@ def cols(df):
                 addr=pick(df.columns,"business_address","address"),
                 country=pick(df.columns,"country"))
 
-# ---- norm2 (convention: uppercase -> strip ASCII punct -> collapse ws) ----
+# norm2 (convention: uppercase -> strip ASCII punct -> collapse ws)
 def N(e):
     return (e.str.to_uppercase()
              .str.replace_all(r"[!-/:-@\[-`{-~]", "")
@@ -810,7 +782,7 @@ GID = pick(gt.columns, "source1_entity_id", "s1_id", "id")
 GM  = pick(gt.columns, "matched_entity_ids", "matches", "matched_ids")
 print("shapes:", s1.shape, s2.shape, s3.shape, gt.shape)
 
-# ---- GT: derive n_matches locally, auto-detect separator ----
+# GT: derive n_matches locally, auto-detect separator
 raw = gt[GM].fill_null("")
 seps = [",", ";", "|", " "]
 sep = max(seps, key=lambda s: raw.str.contains(s, literal=True).fill_null(False).sum())
@@ -820,7 +792,7 @@ gt2 = gt.with_columns(mlist.alias("m")).with_columns(pl.col("m").list.len().alia
 print("mean n_matches (expect ~3.46):", round(gt2["n_matches"].mean(), 4),
       "| singles:", int((gt2["n_matches"] == 1).sum()))
 
-# ---- pos: 25k GT rows weighted by n_matches, exploded ----
+# pos: 25k GT rows weighted by n_matches, exploded
 rng = np.random.default_rng(0)
 w = gt2["n_matches"].to_numpy().astype("float64"); w /= w.sum()
 idx = rng.choice(gt2.height, size=25_000, replace=False, p=w).tolist()
@@ -831,7 +803,7 @@ pos = (gt2.with_row_index("ri").filter(pl.col("ri").is_in(idx))
           .with_columns(pl.col("cand_id").str.strip_chars().alias("cand_id"))
           .filter((pl.col("cand_id") != "") & pl.col("cand_id").is_not_null()))
 
-# ---- neg: 40k same-country random pairs ----
+# neg: 40k same-country random pairs
 pool = pl.concat([
     s2.select([pl.col(k2["id"]).alias("pid"), pl.col(k2["country"]).alias("ct")]),
     s3.select([pl.col(k3["id"]).alias("pid"), pl.col(k3["country"]).alias("ct")]),
@@ -856,7 +828,7 @@ pairs = pl.concat([pos, neg]).with_row_index("pair_i")
 print("pairs:", pairs.height, "| pos:", int((pairs["y"]==1).sum()),
       "| neg:", int((pairs["y"]==0).sum()))
 
-# ---- pull text via isin (derived vars only; s1/s2/s3 untouched) ----
+# pull text via isin (derived vars only; s1/s2/s3 untouched)
 all_s1 = pairs["s1_id"].unique()
 all_c  = pairs["cand_id"].unique()
 s1x = s1.filter(pl.col(k1["id"]).is_in(all_s1)).select([
@@ -875,7 +847,7 @@ feat = (pairs.join(s1x, on="s1_id", how="left")
 print("pull nulls (expect 0,0):", feat["s1_name"].null_count(), feat["c_name"].null_count())
 print("countries:", {r[0]: r[1] for r in feat.group_by("s1_country").len().rows()})
 
-# ---- per-pair keys ----
+# per-pair keys
 DEV = r"[\u0900-\u097F]"
 feat = (feat
     .with_columns([
@@ -915,7 +887,7 @@ print("universe sizes:", {k: v.len() for k, v in UNI.items()})
 
 del pool, s1samp, gt2, raw, mlist, w, idx, sidx, candx, s1x
 gc.collect()
-#Cell 2 — corpus DFs (universe only):
+# corpus DFs (universe only):
 
 SRC = [(s1, k1), (s2, k2), (s3, k3)]
 
@@ -938,7 +910,7 @@ df_num  = corpus_df("addr", r"\d{2,}", UNI["num"])
 for k in ("name", "addr", "num"):
     got = {"name": df_name, "addr": df_addr, "num": df_num}[k]
     print(f"{k}: universe={UNI[k].len()} covered={got.height} missing={UNI[k].len() - got.height} (expect 0)")
-#Cell 3 — caps, unions, splits, verdict:
+# caps, unions, splits, verdict:
 
 def min_df_join(sh, dff, alias):
     j = sh.join(dff, on="t", how="left")
@@ -1015,15 +987,13 @@ print(f"U_strict pos={pos_f['U_strict'].mean():.4f}  neg={neg_f['U_strict'].mean
 print(f"U_loose  pos={pos_f['U_loose'].mean():.4f}  neg={neg_f['U_loose'].mean():.4f}")
 print("GO = pos >= 0.95")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 14
-# ==========================================================================
+# --- cell 14 ---
 import gc, unicodedata
 import numpy as np
 import polars as pl
 from pathlib import Path
 
-# ---- paths ----
+# paths
 TRAIN = Path("/home/ubuntu/dataset/student_resource/dataset/train")
 def find(name):
     p = TRAIN / name
@@ -1042,7 +1012,7 @@ def cols(df):
                 addr=pick(df.columns,"business_address","address"),
                 country=pick(df.columns,"country"))
 
-# ---- norm2: uppercase -> strip ASCII punct -> collapse ws ----
+# norm2: uppercase -> strip ASCII punct -> collapse ws
 def N(e):
     return (e.str.to_uppercase()
              .str.replace_all(r"[!-/:-@\[-`{-~]", "")
@@ -1067,7 +1037,7 @@ GID = pick(gt.columns, "source1_entity_id", "s1_id", "id")
 GM  = pick(gt.columns, "matched_entity_ids", "matches", "matched_ids")
 print("shapes:", s1.shape, s2.shape, s3.shape, gt.shape)
 
-# ---- GT: derive n_matches locally, auto-detect separator ----
+# GT: derive n_matches locally, auto-detect separator
 raw = gt[GM].fill_null("")
 seps = [",", ";", "|", " "]
 sep = max(seps, key=lambda s: raw.str.contains(s, literal=True).fill_null(False).sum())
@@ -1077,7 +1047,7 @@ gt2 = (gt.with_columns(raw.str.split(sep).alias("m"))
 print("mean n_matches (expect ~3.51 incl. empties as 1):", round(gt2["n_matches"].mean(), 4),
       "| singles:", int((gt2["n_matches"] == 1).sum()))
 
-# ---- pos: 25k GT rows weighted by n_matches, exploded ----
+# pos: 25k GT rows weighted by n_matches, exploded
 rng = np.random.default_rng(0)
 w = gt2["n_matches"].to_numpy().astype("float64"); w /= w.sum()
 idx = rng.choice(gt2.height, size=25_000, replace=False, p=w).tolist()
@@ -1088,7 +1058,7 @@ pos = (gt2.with_row_index("ri").filter(pl.col("ri").is_in(idx))
           .with_columns(pl.col("cand_id").str.strip_chars().alias("cand_id"))
           .filter((pl.col("cand_id") != "") & pl.col("cand_id").is_not_null()))
 
-# ---- neg: 40k same-country random pairs ----
+# neg: 40k same-country random pairs
 pool = pl.concat([
     s2.select([pl.col(k2["id"]).alias("pid"), pl.col(k2["country"]).alias("ct")]),
     s3.select([pl.col(k3["id"]).alias("pid"), pl.col(k3["country"]).alias("ct")]),
@@ -1113,7 +1083,7 @@ pairs = pl.concat([pos, neg]).with_row_index("pair_i")
 print("pairs:", pairs.height, "| pos:", int((pairs["y"]==1).sum()),
       "| neg:", int((pairs["y"]==0).sum()))
 
-# ---- text pull via isin (derived vars only) ----
+# text pull via isin (derived vars only)
 all_s1 = pairs["s1_id"].unique().to_list()
 all_c  = pairs["cand_id"].unique().to_list()
 s1x = s1.filter(pl.col(k1["id"]).is_in(all_s1)).select([
@@ -1132,7 +1102,7 @@ feat = (pairs.join(s1x, on="s1_id", how="left")
 print("pull nulls (expect 0,0):", feat["s1_name"].null_count(), feat["c_name"].null_count())
 print("countries:", {r[0]: r[1] for r in feat.group_by("s1_country").len().rows()})
 
-# ---- per-pair keys ----
+# per-pair keys
 DEV = r"[\u0900-\u097F]"
 feat = (feat
     .with_columns([
@@ -1172,7 +1142,7 @@ print("universe sizes:", {k: v.len() for k, v in UNI.items()})
 
 del pool, s1samp, gt2, raw, w, idx, sidx, candx, s1x, neg_frames
 gc.collect()
-#Cell 2 — record-level corpus DFs:
+# record-level corpus DFs:
 
 SRC = [(s1, k1), (s2, k2), (s3, k3)]
 
@@ -1193,7 +1163,7 @@ df_addr = corpus_df("addr", r"\w+",    UNI["addr"])
 df_num  = corpus_df("addr", r"\d{2,}", UNI["num"])
 for kk, d in (("name", df_name), ("addr", df_addr), ("num", df_num)):
     print(f"{kk}: universe={UNI[kk].len()} covered={d.height} missing={UNI[kk].len()-d.height} (expect 0)")
-#Cell 3 — min-DF + unions (the cells that must re-run against the new DFs):
+# min-DF + unions (the cells that must re-run against the new DFs):
 
 def min_df_join(sh, dff, alias):
     j = sh.join(dff, on="t", how="left")
@@ -1269,7 +1239,7 @@ print("\n=== EDA-10 corrected unions ===")
 print(f"U_strict pos={pos_f['U_strict'].mean():.4f}  neg={neg_f['U_strict'].mean():.4f}")
 print(f"U_loose  pos={pos_f['U_loose'].mean():.4f}  neg={neg_f['U_loose'].mean():.4f}")
 print(f"U_uncapped pos={pos_f['U_uncapped'].mean():.4f}  neg={neg_f['U_uncapped'].mean():.4f}")
-#Cell 4 — EDA-11 cap sweep:
+# EDA-11 cap sweep:
 
 # EDA-11: cap sweep — recall / neg / sum-UB candidates-per-S1 across DF caps
 CAPS = [100, 300, 1000, 3000, 10000, 30000, 100000, 10**12]
@@ -1281,7 +1251,7 @@ def uexpr(ca, cn):
             | (pl.col("mm") <= cn).fill_null(False)
             | pl.col("exact_fold"))
 
-# --- per-S1 token cost (sum-UB, pre-dedup), built ONCE ---
+# per-S1 token cost (sum-UB, pre-dedup), built ONCE
 s1tok = f2.select(["s1_id", "sn1", "n1", "a1", "m1"]).unique(subset=["s1_id"])
 def explode_join(listcol, dff):
     e = s1tok.select(["s1_id", pl.col(listcol).alias("t")]).explode("t").drop_nulls()
@@ -1290,7 +1260,7 @@ en = explode_join("n1", df_name)
 ea = explode_join("a1", df_addr)
 em = explode_join("m1", df_num)
 
-# --- exact-key cost (pool s2+s3, record-level, no unique) ---
+# exact-key cost (pool s2+s3, record-level, no unique)
 keys = s1tok["sn1"].unique().to_list()
 eparts = []
 for src, k in [(s2, k2), (s3, k3)]:
@@ -1321,9 +1291,7 @@ for ca, cn in COMBOS:
     tag = " <= continuity w/ Cell 3" if (ca, cn) in [(300, 100), (1000, 1000)] else (" <- uncapped" if ca > 10**11 else "")
     print(f"{ca:>7} {cn:>7} | {p:9.4f} {n:8.4f} | {m:10.1f} {q:7.0f} {z:6.1f} | {m + mean_exact:11.1f}{tag}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 15
-# ==========================================================================
+# --- cell 15 ---
 # EDA-12: pair-key (2-token / cross-field) recall ceilings from in-memory sh_*
 cntN = sh_n.group_by("pair_i").len().rename({"len": "cntN"})
 cntA = sh_a.group_by("pair_i").len().rename({"len": "cntA"})
@@ -1377,9 +1345,7 @@ for r in gc_.iter_rows(named=True):
     tag = "pos" if r["y"] == 1 else "neg"
     print(f"  cross={r['cross']} {tag}  pair+exact={r['u1']:.4f}  +tokens={r['u2']:.4f}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 16
-# ==========================================================================
+# --- cell 16 ---
 # EDA-13a: pool postings (s2+s3) — global pid = row_index (+ s2.height offset for s3)
 s1tok = f2.select(["s1_id", "sn1", "n1", "a1", "m1"]).unique(subset=["s1_id"])
 tokN = s1tok.select(pl.col("n1").explode().alias("t")).drop_nulls().unique()
@@ -1437,7 +1403,6 @@ EX = {fk: np.asarray(r, dtype=np.int64) for fk, r in exact_post.group_by("fk").a
 print("exact-fold postings rows:", exact_post.height, "| buckets:", len(EX))
 del eparts, exact_post, fold_keys, fk_l
 gc.collect()
-#Cell B:
 
 # EDA-13b: greedy key selection at budget -> recall & exact distinct candidates
 MAXB = 200
@@ -1554,18 +1519,14 @@ print(f"\nsingles+exact ONLY @50: recall={abl['cov']/max(abl['tot'],1):.4f}  mea
 print("recall @50 by country:", {k: round(v/max(res[50]['ct_tot'][k],1), 4)
       for k, v in res[50]["ct_cov"].items()})
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 17
-# ==========================================================================
+# --- cell 17 ---
 import pickle
 with open("block_state.pkl", "wb") as f:
     pickle.dump(dict(P_N=P_N, P_A=P_A, P_M=P_M, mapN=mapN, mapA=mapA, mapM=mapM, EX=EX,
                      match_map=match_map, ct_map=ct_map, s1tok=s1tok, f2=f2), f)
 print("state saved")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 18
-# ==========================================================================
+# --- cell 18 ---
 # EDA-14: miss autopsy at budget 50 (pos S1s only) -> capacity vs big-key vs no-shared
 stat = {"covered": 0, "capacity": 0, "big_single": 0, "exact_big": 0, "anomaly": 0, "no_shared": 0}
 by_ct = {}
@@ -1622,9 +1583,7 @@ for ct, d in by_ct.items():
     print(f"  {ct:6}: cov {d['covered']/t:.4f} | cap {d['capacity']/t:.4f} | big {d['big_single']/t:.4f} "
           f"| exbig {d['exact_big']/t:.4f} | anom {d['anomaly']/t:.4f} | none {d['no_shared']/t:.4f}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 19
-# ==========================================================================
+# --- cell 19 ---
 import pickle, unicodedata
 import numpy as np
 import polars as pl
@@ -1705,9 +1664,7 @@ def run_greedy(ev, budget, solo_only=False):
 
 print("restored | EX:", len(EX), "| pos pairs:", sum(len(v) for v in match_map.values()), "| s1tok:", s1tok.height)
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 20
-# ==========================================================================
+# --- cell 20 ---
 # EDA-15: joint MAXB x budget grid, ev built ONCE per row (MAXB=inf), filter per config
 GRID_M = [200, 1000, 5000, 10**9]        # 10**9 = effectively inf
 GRID_B = [50, 100, 200]
@@ -1740,9 +1697,7 @@ for m_cfg in GRID_M:
         print(f"{LABEL[m_cfg]:>5} | {b_cfg:6} | {g['cov']/max(g['tot'],1):7.4f} | "
               f"{cs.mean():6.1f} {np.median(cs):5.0f} {np.percentile(cs,99):5.0f} {float((cs==0).mean())*100:6.1f}")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 21
-# ==========================================================================
+# --- cell 21 ---
 # EDA-16 T1: test load + 20k/country sample + test-pool postings (2 passes/source, string-keyed)
 import numpy as np, polars as pl, unicodedata, gc, time
 BASE = "/home/ubuntu/dataset/student_resource/dataset"
@@ -1840,7 +1795,6 @@ del t2, t3
 gc.collect()
 print("posting rows:", sum(len(v) for v in PT_N.values()),
       sum(len(v) for v in PT_A.values()), sum(len(v) for v in PT_M.values()))
-#Cell T2 — greedy counts by country:
 
 # EDA-16 T2: greedy @ {50,100,200} on sampled test S1 - candidate counts by country + projections
 MAXB = 200
@@ -1918,9 +1872,7 @@ for b in BUDGETS:
           f"{a.max():5.0f} {float((a==0).mean())*100:6.1f} || proj pairs {proj/1e6:.0f}M "
           f"~{proj*20/1e9:.1f} GB | full-run est {dt/n*1732544/3600:.1f} h")
 
-# ==========================================================================
-# NOTEBOOK CODE CELL 22
-# ==========================================================================
+# --- cell 22 ---
 PMAP = {"N": P_N, "A": P_A, "M": P_M}
 assert PMAP["N"] is P_N and len(P_N) > 20000, "train postings missing - re-run the blocking-state cell first"
 print("PMAP -> train postings:", len(P_N), len(P_A), len(P_M), "| EX:", len(EX))

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# train.py - trains and gates the v4 model (uses all cores).
-# Rebuilds train candidate features with features (36), labels from FULL GT,
-# trains xgb/lgbm/cat variants, threshold sweep, end-to-end validation (baseline anchor F0.5 0.9082).
-# Writes /home/ubuntu/v4_model.json consumed by inference.py.
-# Regression check: fresh XGBoost on the 20 baseline features at t=0.97 must score ~0.9082 val macro F0.5.
+"""train.py - trains and gates the v4 model (uses all cores).
+Rebuilds train candidate features with the 36 features from features.py, labels from FULL GT,
+trains xgb/lgbm/cat variants, threshold sweep, end-to-end validation (baseline anchor F0.5 0.9082).
+Writes /home/ubuntu/v4_model.json consumed by inference.py.
+Regression check: fresh XGBoost on the 20 baseline features at t=0.97 must score ~0.9082 val macro F0.5.
+"""
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "8")
-import gc, json, time, sys
+import gc, json, time
 import numpy as np
 import polars as pl
 import features
@@ -281,7 +282,7 @@ best = max(results, key=lambda r: r["best_m"])
 
 # ---- write v4_model.json ----
 if best["name"] == "A0 xgb-20":
-    models = [{"kind": "xgb", "path": "/home/ubuntu/v4_xgb20.json"}]  # saved below if needed
+    models = [{"kind": "xgb", "path": "/home/ubuntu/v4_xgb20.json"}]  # written above
     feats = features.OLD
 elif best["name"] == "A1 xgb-36":
     models = [{"kind": "xgb", "path": "/home/ubuntu/v4_xgb.json", "weight": 1.0}]

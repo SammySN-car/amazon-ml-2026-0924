@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-# rescore.py - PREDICT-ONLY rescoring from saved X.npy. No FE, no blocking.
-#   Recomputes pass.npz under a different threshold and/or model spec in minutes,
-#   so threshold and post-processing sweeps cost only an assemble_submission run.
-#
-# env SRCD  = source dir with c*.cand.npz + c*.X.npy  (default /home/ubuntu/test_out_v4)
-# env OUTD  = output dir: new c*.pass.npz + SYMLINKED c*.cand.npz (default /home/ubuntu/out_rescore)
-# env MODEL = model spec json, same schema as v4_model.json
-#             {"models":[{kind,path,weight}...], "feats":[...], "threshold":...}
-# env TAU   = decision threshold (default = spec's own threshold)
-# env NW    = fork workers (default 8)
-#
-# Then build TSVs:
-#   SRCD is irrelevant for build; use:
-#   OUTD=<this OUTD> OUTDIR=<...> POSTPROC=none|country|country+1to1 python assemble_submission.py
-#
-# Safety: OUTD must differ from SRCD (never clobbers the inference pass.npz).
-# Regression check: run with TAU=<inference threshold> and MODEL=<inference model> -> pass
-# totals must equal inference's.
+"""rescore.py - PREDICT-ONLY rescoring from saved X.npy. No FE, no blocking.
+Recomputes pass.npz under a different threshold and/or model spec in minutes,
+so threshold and post-processing sweeps cost only an assemble_submission run.
+
+env SRCD  = source dir with c*.cand.npz + c*.X.npy  (default /home/ubuntu/test_out_v4)
+env OUTD  = output dir: new c*.pass.npz + SYMLINKED c*.cand.npz (default /home/ubuntu/out_rescore)
+env MODEL = model spec json, same schema as v4_model.json
+{"models":[{kind,path,weight}...], "feats":[...], "threshold":...}
+env TAU   = decision threshold (default = spec's own threshold)
+env NW    = fork workers (default 8)
+
+Then build TSVs:
+SRCD is irrelevant for build; use:
+OUTD=<this OUTD> OUTDIR=<...> POSTPROC=none|country|country+1to1 python assemble_submission.py
+
+Safety: OUTD must differ from SRCD (never clobbers the inference pass.npz).
+Regression check: run with TAU=<inference threshold> and MODEL=<inference model> -> pass
+totals must equal inference's.
+"""
 import os, re, gc, glob, time, json
 import numpy as np
 from multiprocessing import get_context
@@ -101,7 +102,7 @@ def work(job):
         X = np.load(src_x)
         if X.shape[0] != ri_arr.size:
             return ("ERR", n, 0, 0, f"row misalignment X {X.shape[0]} != cand {ri_arr.size}")
-        p = predict(X)
+        p = predict(X) if X.shape[0] else np.empty(0, dtype=np.float32)
         keep = p >= TAU
         out_ri = ri_arr[keep]
         out_pid = pid_arr[keep]
